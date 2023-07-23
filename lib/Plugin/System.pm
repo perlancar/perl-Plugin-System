@@ -1,84 +1,107 @@
+## no critic: TestingAndDebugging::RequireUseStrict
 package Plugin::System;
 
+# AUTHORITY
 # DATE
+# DIST
 # VERSION
 
-use strict 'subs', 'vars';
-use warnings;
-use Log::ger;
-
 1;
-# ABSTRACT: An opinionated plugin+hooks system for your Perl module/application
+# ABSTRACT: An opinionated plugin system for your Perl framework/application
 
 =head1 SYNOPSIS
 
-In your main module:
+ package Your::Framework;
+ use Plugin::System;
 
- package My::App;
- use Plugin::System qw(perform_action_with_plugins);
+ Plugin::System->init_plugin_system(
 
- sub suspend_user {
-     my ($self, $r) = @_;
+     # optional, default to caller package (i.e. in this case, Your::Framework)
+     namespace => 'Your::Framework::Plugin',
 
-     perform_action_with_plugins(
-         # name of the hook. by default, will take caller()'s name (in this
-         # case, also 'suspend_user').
-         hook_name => 'suspend_user',
+     # required, list of known events
+     events => {
+         check_input => { ... },
+         output => { ... },
+         ...
+     },
+     ...
 
-         # list of plugins to include. if not specified, will take caller's
-         # package (in this case, 'My::App'), add '::Plugin' to it, and list and
-         # include all modules under that namespace. in other words, will
-         # include all installed plugins.
-         #
-         # if you want to exclude some installed modules, use modules from
-         # another namespace, or use several instances of the same module, you
-         # can specify an array of module names or module instances here. you
-         # can also set $main::Plugins instead of passing list of plugins here.
-         plugins     => $plugins, # e.g. ['My::App::Plugin::Foo', bless('My::App::Plugin::Bar', {config=>{path=>'/path1'}}), bless('My::App::Plugin::Bar', {config=>{path=>'/path2'}})]
+ );
 
-         # what arguments to pass to each plugin's hook handler. if not
-         # specified, plugin will get $stash, which is a hashref passed from
-         # plugin to plugin and containing some information (see STASH).
-         args        => [$self, $r],
-
-         # other hook to run before performing our hook. by default, will not
-         # run a before hook. can also be set to just '1' which means to use
-         # 'before_' + hook_name (in this case, also 'before_suspend_user'). the
-         # before hook can abort the main hook if a hook returns XXX.
-         before_hook => 'before_suspend_user',
-
-         # code to perform action for the hook. required.
-         action => sub {
-             ...
-         },
-
-         # other hook to run after performing our hook. by default, will not
-         # run a before hook. can also be set to just '1' which means to use
-         # 'before_' + hook_name (in this case, also 'before_suspend_user').
-         before_hook => 'before_suspend_user',
+ sub bar {
+     ...
+     __PACKAGE__->run_event_with_plugins(
+         event => 'check_input',
+         # req_handler => 0,                         # optional
+         # run_all_handlers => 1,                    # optional
+         # allow_before_handler_to_skip_rest => 1,   # optional
+         # allow_handler_to_skip_rest => 1,          # optional
+         # allow_handler_to_repeat_event => 1,       # optional
+         # allow_after_handler_to_skip_rest => 1,    # optional
+         # allow_after_handler_to_repeat_event => 1, # optional
+         # stop_after_first_handler_failure => 1,    # optional
      );
  }
 
- sub unsuspend_user {
-     my ($self, $r) = @_;
+ 1;
 
-     perform_action_with_plugins(
-         args => \@_,
-         before_hook => 1,
-         action => sub { ... },
-         after_hook => 1,
-     );
+Afterwards, your framework can use the plugin system, e.g.:
+
+ # a plugin module, containing handlers and meta information
+ package Your::Framework::Plugin::Foo;
+
+ sub plugin_meta {
+     return +{ priority => ..., };
  }
+
+ sub new {
+     my ($self, %args) = @_;
+     ...
+ }
+
+ # required handler if we want to handle the 'check_input' event
+ sub on_check_input {
+     ...
+
+     # plugin can signal success by returning [200] or error by returning [4xx]
+     # or [5xx] status. it can also return [201] to instruct run_event() to skip
+     # calling the rest of the plugins for the event. it can also return [204]
+     # to "decline".
+ }
+
+ # a before_ handler is optional
+ sub before_check_input {
+     my ($self, $r) = @_;
+     ...
+
+     # plugin can instruct to cancel the event by returning [601].
+ }
+
+ # an after_ handler is optional
+ sub after_check_input {
+     my ($self, $r) = @_;
+     ...
+     # plugin can instruct to repeat an event by returning [602].
+ }
+
+ 1;
+
+To use the plugin, user can activate it:
+
+ use Your::Framework 'Foo' => {arg=>..., arg2 => ...};
 
 
 =head1 DESCRIPTION
 
+B<NOT YET IMPLEMENTED. A NAME GRAB ONLY.>
+
 A plugin approach offers flexibility. Users can enable or disable plugins which
 they need, sometimes also in the order that they want. Each plugin can supply
-behavior at various points (hooks) in an application. More than one plugin (also
-multiple instances of the same plugin) can supply behavior for a single hook. In
-addition, a plugin can modify the flow of the application by aborting or
-repeating a hook.
+behavior at various points (events) in an application. More than one plugin
+(also multiple instances of the same plugin) can supply behavior for a single
+event. In addition, a plugin can modify the flow of the application by aborting
+or repeating an event.
 
 
 =head1 SEE ALSO
