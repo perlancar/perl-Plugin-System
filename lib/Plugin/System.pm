@@ -23,11 +23,11 @@ sub install_routines {
     my ($target_pkg, $routines) = @_;
 
     if (!defined &subname) {
-        if (eval { require Sub::Name; 1 }) {
-            *subname = \&Sub::Name::subname;
-        } else {
+        #if (eval { require Sub::Name; 1 }) {
+        #    *subname = \&Sub::Name::subname;
+        #} else {
             *subname = sub {};
-        }
+        #}
     }
 
     for my $r (@$routines) {
@@ -38,23 +38,43 @@ sub install_routines {
 }
 
 sub add_target {
-    my ($pkg, $conf) = @_;
+    my ($pkg, %args) = @_;
+
+    # check arguments
+    my $events = delete $args{events} or die "Please specify 'events' argument";
+    for (keys %$events) { /\A\w+\z/ or die "Invalid syntax in event name '$_', please use alphanumeric only" };
+
+    keys %args and die "Unknown argument(s): ".join(", ", sort keys %args);
+
     # if already defined, overwrite previous configuration
-    $Target_Packages{$pkg} = $conf;
+    $Target_Packages{$pkg} = {events => $events};
+}
+
+sub init_target {
+    my $pkg = shift;
+
+    my $args = $Target_Packages{$pkg} or die "Package '$pkg' has not been added as target yet";
+
+    my $routines = [];
+    for my $event (keys %{ $args->{events} }) {
+        push @$routines, [sub(;&@) { 1 }, "event_$event"];
+    }
+    install_routines($pkg, $routines);
 }
 
 sub _import_to {
-    my ($pkg, $target_pkg, %conf) = @_;
+    my $pkg = shift;
+    my $target_pkg = shift;
 
-    add_target($target_pkg, \%conf);
+    add_target($target_pkg, @_);
     init_target($target_pkg);
 }
 
 sub import {
-    my ($pkg, %conf) = @_;
+    my $pkg = shift;
 
     my $caller = caller(0);
-    $pkg->_import_to($caller, \%conf);
+    $pkg->_import_to($caller, @_);
 }
 
 1;
